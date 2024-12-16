@@ -4,10 +4,9 @@
 #include <stdbool.h>
 
 typedef struct {
-    char** splitees;
-    int splitees_count;
-    char** splits;
-    int splits_count;
+    char** split_vec;
+    int cap;
+    int size;
 } Splits;
 
 char* read_to_str(const char* filename) {
@@ -58,14 +57,11 @@ bool is_char_split(const char val) {
 }
 
 Splits split(const char* filestr) {
-    int cap_spltee = 4;
-    int cap_splt = 4;
-    int count_spltee = 0;
-    int count_splt = 0;
-    char** splittees = malloc(cap_spltee * sizeof(char*));
-    char** splits = malloc(cap_splt * sizeof(char*));
+    int size = 0;
+    int cap = 4;
+    char** splits = malloc(cap * sizeof(char*));
 
-    if (!splittees || !splits) {
+    if (!splits) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(1);
     }
@@ -77,32 +73,26 @@ Splits split(const char* filestr) {
                 char word[i - start + 1];
                 strncpy(word, &filestr[start], i - start);
                 word[i - start] = '\0';
-                append(&splittees, &count_spltee, &cap_spltee, word);
+                append(&splits, &size, &cap, word);
             }
             const char split[2] = {filestr[i], '\0'};
-            append(&splits, &count_splt, &cap_splt, split);
+            append(&splits, &size, &cap, split);
             start = i + 1;
         }
     }
 
     if (start < strlen(filestr)) {
-        append(&splittees, &count_spltee, &cap_spltee, &filestr[start]);
+        append(&splits, &size, &cap, &filestr[start]);
     }
 
-    const Splits result = {splittees, count_spltee, splits, count_splt};
-    return result;
+    return (Splits) {splits, cap, size};
 }
 
 void free_splits(const Splits* spli) {
-    for (int i = 0; i < spli->splitees_count; i++) {
-        free(spli->splitees[i]);
+    for (int i = 0; i < spli->size; i++) {
+        free(spli->split_vec[i]);
     }
-    free(spli->splitees);
-
-    for (int i = 0; i < spli->splits_count; i++) {
-        free(spli->splits[i]);
-    }
-    free(spli->splits);
+    free(spli->split_vec);
 }
 
 char** find(const char* match, const Splits split, int* matches_count) {
@@ -114,15 +104,31 @@ char** find(const char* match, const Splits split, int* matches_count) {
         exit(1);
     }
 
-    for (int i = 0; i < split.splitees_count; i++) {
-        if (strcmp(split.splitees[i], match) == 0) {
-            append(&matches, &count, &cap, split.splitees[i]);
-        }
-    }
-
-    for (int i = 0; i < split.splits_count; i++) {
-        if (strcmp(split.splits[i], match) == 0) {
-            append(&matches, &count, &cap, split.splits[i]);
+    for (int i = 0; i < split.size; i++) {
+        if (strcmp(split.split_vec[i], match) == 0) {
+            int line_start = i;
+            int line_end = i;
+            while (line_start > 0 && strcmp(split.split_vec[line_start - 1], "\n") != 0) {
+                line_start--;
+            }
+            while (line_end < split.size - 1 && strcmp(split.split_vec[line_end], "\n") != 0) {
+                line_end++;
+            }
+            size_t line_length = 0;
+            for (int j = line_start; j <= line_end; j++) {
+                line_length += strlen(split.split_vec[j]) + 1;
+            }
+            char* line_aggregation = malloc(line_length + 1);
+            if (!line_aggregation) {
+                fprintf(stderr, "Memory allocation failed\n");
+                exit(1);
+            }
+            line_aggregation[0] = '\0';
+            for (int j = line_start; j <= line_end; j++) {
+                strcat(line_aggregation, split.split_vec[j]);
+            }
+            append(&matches, &count, &cap, line_aggregation);
+            free(line_aggregation);
         }
     }
 
@@ -130,22 +136,63 @@ char** find(const char* match, const Splits split, int* matches_count) {
     return matches;
 }
 
+void print_line_matches(char** matches, const char* seekout, const int match_count) {
+    printf("Matches:\n");
+    for (int i = 0; i < match_count; i++) {
+        const Splits matchsplt = split(matches[i]);
+        for (int j = 0; j < matchsplt.size; j++) {
+            char* match = matchsplt.split_vec[j];
+            strcmp(match, seekout) == 0 ? printf("\033[0;31m%s\033[0m", match) : printf("%s", match);
+        }
+        free(matches[i]);
+    }
+    free(matches);
+}
+
+void print_matches(char** matches, const char* seekout, const int match_count) {
+    int count = 0;
+    for (int i = 0; i < match_count; ++i) {
+        const Splits matchsplt = split(matches[i]);
+        for (int j = 0; j < matchsplt.size; ++j) {
+            const char* match = matchsplt.split_vec[j];
+            if (strcmp(match, seekout) == 0) count++;
+        }
+    }
+    printf("Match count: %d", count);
+}
+
 int main(const int argc, char* argv[]) {
-    if (argc != 3) {
+    if (argc > 4 || argc < 3) {
         fprintf(stderr, "Invalid arguments\n");
         return 1;
     }
+
     const char* seekout = argv[2];
+    char* line_flag = "";
+    if (argc == 4) {
+        if (strcmp(argv[3], "-l") == 0){
+            line_flag = strcpy(line_flag, argv[3]);
+        } else {
+            fprintf(stderr, "Invalid flag");
+            return 1;
+        }
+    }
+
+
     char* filestr = read_to_str(argv[1]);
     if (!filestr) return 1;
+
     const Splits spli = split(filestr);
+
     int match_count = 0;
     char** matches = find(seekout, spli, &match_count);
-    printf("Matches: ");
-    for (int i  = 0; i < match_count; i++) {
-        printf("\033[31m%s\033[0m ",matches[i]);
+
+    if (strcmp(line_flag, "-l") == 0) {
+        print_line_matches(matches, seekout, match_count);
+    } else {
+        print_matches(matches, seekout, match_count);
     }
-    printf("\nMatch count: %d", match_count);
+
 
     free_splits(&spli);
     free(filestr);
