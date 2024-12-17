@@ -129,6 +129,7 @@ char** find(const char* match, const Splits split, int* matches_count) {
             }
             append(&matches, &count, &cap, line_aggregation);
             free(line_aggregation);
+            i = line_end;
         }
     }
 
@@ -161,25 +162,31 @@ void print_matches(char** matches, const char* seekout, const int match_count) {
     printf("Match count: %d", count);
 }
 
+void print_help() {
+    static const char help[] =
+        "Usage: untitled [FILE] [OPTION]\n"
+        "No flag: Print amount of matches found in file.\n"
+        "\nOptions:\n"
+        "  -h | --help    Display this help message.\n"
+        "  -l | --lines   Display the program version.\n";
+    printf("%s", help);
+}
+
 int main(const int argc, char* argv[]) {
-    if (argc > 4 || argc < 3) {
-        fprintf(stderr, "Invalid arguments\n");
+    char* seekout = 0;
+    char* filename = 0;
+    if (argc >= 3) {
+        filename = argv[1];
+        seekout = argv[2];
+    } else if (argc >= 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+        print_help();
+        return 1;
+    } else {
+        fprintf(stderr, "Please input an input file and a string to search\n Use the flag -h or --help to see usage.");
         return 1;
     }
 
-    const char* seekout = argv[2];
-    char* line_flag = "";
-    if (argc == 4) {
-        if (strcmp(argv[3], "-l") == 0){
-            line_flag = strcpy(line_flag, argv[3]);
-        } else {
-            fprintf(stderr, "Invalid flag");
-            return 1;
-        }
-    }
-
-
-    char* filestr = read_to_str(argv[1]);
+    char* filestr = read_to_str(filename);
     if (!filestr) return 1;
 
     const Splits spli = split(filestr);
@@ -187,11 +194,19 @@ int main(const int argc, char* argv[]) {
     int match_count = 0;
     char** matches = find(seekout, spli, &match_count);
 
-    if (strcmp(line_flag, "-l") == 0) {
-        print_line_matches(matches, seekout, match_count);
-    } else {
-        print_matches(matches, seekout, match_count);
-    }
+    if (argc >= 4) {
+        const char* arg = argv[3];
+        if (strcmp(arg, "-l") == 0 || strcmp(arg, "--lines") == 0) {
+            print_line_matches(matches, seekout, match_count);
+            return 0;
+        } else if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
+            print_help();
+            return 0;
+        } else {
+            fprintf(stderr, "Unknown flag. -h or --help for help");
+            return 1;
+        }
+    } else if (argc == 3) print_matches(matches, seekout, match_count);
 
 
     free_splits(&spli);
