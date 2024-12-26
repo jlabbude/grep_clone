@@ -2,12 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-
-typedef struct {
-    char** split_vec;
-    int cap;
-    int size;
-} Splits;
+#include "grep.h"
 
 char* read_to_str(const char* filename) {
     char* buff = NULL;
@@ -173,8 +168,8 @@ void print_help() {
 }
 
 int main(const int argc, char* argv[]) {
-    char* seekout = 0;
-    char* filename = 0;
+    const char* seekout = 0;
+    const char* filename = 0;
     if (argc >= 3) {
         filename = argv[1];
         seekout = argv[2];
@@ -208,6 +203,7 @@ int main(const int argc, char* argv[]) {
         }
     } else if (argc == 3) print_matches(matches, seekout, match_count);
 
+    regex_tokenizer(0);
 
     free_splits(&spli);
     free(filestr);
